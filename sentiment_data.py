@@ -3,6 +3,7 @@
 from utils import *
 import re
 import numpy as np
+from pdb import set_trace
 
 
 # Wraps a sequence of word indices with a 0-1 label (0 = negative, 1 = positive)

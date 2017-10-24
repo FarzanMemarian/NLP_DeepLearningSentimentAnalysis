@@ -2,6 +2,7 @@
 
 import tensorflow as tf
 import numpy as np
+from pdb import set_trace
 
 # Example of training a feedforward network with one hidden layer to solve XOR.
 if __name__=="__main__":
@@ -23,20 +24,22 @@ if __name__=="__main__":
     fx = tf.placeholder(tf.float32, feat_vec_size)
     # Other initializers like tf.random_normal_initializer are possible too
     V = tf.get_variable("V", [embedding_size, feat_vec_size], initializer=tf.contrib.layers.xavier_initializer(seed=0))
-    # Can use other nonlinearities: tf.nn.relu, tf.tanh, etc.
+    # Can use other nonlinearities: tf.nn.relu, tf.tanh, etc.   
     z = tf.sigmoid(tf.tensordot(V, fx, 1))
     W = tf.get_variable("W", [num_classes, embedding_size])
     probs = tf.nn.softmax(tf.tensordot(W, z, 1))
     # This is the actual prediction -- not used for training but used for inference
-    one_best = tf.argmax(probs)
+    one_best = tf.argmax(probs)   
 
     # Input for the gold label so we can compute the loss
     label = tf.placeholder(tf.int32, 1)
     # Convert a value-based representation (e.g., [2]) into the one-hot representation ([0, 0, 1])
     # Because label is a tensor of dimension one, the one-hot is actually [[0, 0, 1]], so
     # we need to flatten it.
+    set_trace()
     label_onehot = tf.reshape(tf.one_hot(label, num_classes), shape=[num_classes])
     loss = tf.negative(tf.log(tf.tensordot(probs, label_onehot, 1)))
+
 
 
     # TRAINING ALGORITHM CUSTOMIZATION

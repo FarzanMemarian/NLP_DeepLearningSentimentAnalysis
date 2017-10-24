@@ -1,5 +1,5 @@
 # utils.py
-
+from pdb import set_trace
 
 # Bijection between objects and integers starting at 0. Useful for mapping
 # labels, features, etc. into coordinates of a vector space.
