@@ -38,6 +38,9 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     # slightly more compact code for the binary case is possible.
     num_classes = 2
 
+    # *************************************************
+    # *************************************************
+    # *************************************************
     # DEFINING THE COMPUTATION GRAPH
     # Define the core neural network
     fx = tf.placeholder(tf.float32, feat_vec_size)
@@ -59,7 +62,9 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     loss = tf.negative(tf.log(tf.tensordot(probs, label_onehot, 1)))
 
 
-
+    # *************************************************
+    # *************************************************
+    # *************************************************
     # TRAINING ALGORITHM CUSTOMIZATION
     # Decay the learning rate by a factor of 0.99 every 10 gradient steps (for larger datasets you'll want a slower
     # weight decay schedule
@@ -87,6 +92,10 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     with tf.control_dependencies([apply_gradient_op]):
         train_op = tf.no_op(name='train')
 
+
+    # *************************************************
+    # *************************************************
+    # *************************************************
     # RUN TRAINING AND TEST
     # Initializer; we need to run this first to initialize variables
     init = tf.global_variables_initializer()
@@ -106,33 +115,42 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
         for i in range(0, num_epochs):
             loss_this_iter = 0
             # batch_size of 1 here; if we want bigger batches, we need to build our network appropriately
-            for ex_idx, train_exmple in enumerate(train_exs):
+            for ex_idx, train_example in enumerate(train_exs):
                 sum_vec = np.zeros(len(word_vectors.vectors[0]))
-                for idx in train_exmple.indexed_words:
+                for idx in train_example.indexed_words:
                     sum_vec += word_vectors.vectors[idx]
-                mean_vec = sum_vec/len(train_exmple.indexed_words)
+                mean_vec = sum_vec/len(train_example.indexed_words)
 
                 # sess.run generally evaluates variables in the computation graph given inputs. "Evaluating" train_op
                 # causes training to happen
-                [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], feed_dict = {fx: train_xs[ex_idx],
-                                                                                  label: np.array([train_ys[ex_idx]])})
+                # set_trace()
+                [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], feed_dict = {fx: mean_vec,
+                                                                                  label: np.array([train_example.label])})
                 train_writer.add_summary(summary, step_idx)
                 step_idx += 1
+                set_trace()
                 loss_this_iter += loss_this_instance
+
+
             print "Loss for iteration " + repr(i) + ": " + repr(loss_this_iter)
         # Evaluate on the train set
         train_correct = 0
-        for ex_idx in xrange(0, len(train_xs)):
+        for ex_idx, train_example in enumerate(train_exs):
+            sum_vec = np.zeros(len(word_vectors.vectors[0]))
+            for idx in train_example.indexed_words:
+                sum_vec += word_vectors.vectors[idx]
+            mean_vec = sum_vec/len(train_example.indexed_words)
+
             # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
             # quantities from the running of the computation graph, namely the probabilities, prediction, and z
             [probs_this_instance, pred_this_instance, z_this_instance] = sess.run([probs, one_best, z],
-                                                                                  feed_dict={fx: train_xs[ex_idx]})
-            if (train_ys[ex_idx] == pred_this_instance):
+                                                                                  feed_dict={fx: mean_vec})
+            if (train_example.label == pred_this_instance):
                 train_correct += 1
-            print "Example " + repr(train_xs[ex_idx]) + "; gold = " + repr(train_ys[ex_idx]) + "; pred = " +\
+            print "Example " + repr(mean_vec) + "; gold = " + repr(train_example.label) + "; pred = " +\
                   repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
             print "  Hidden layer activations for this example: " + repr(z_this_instance)
-        print repr(train_correct) + "/" + repr(len(train_ys)) + " correct after training"
+        print repr(train_correct) + "/" + repr(len(train_exs)) + " correct after training"
 
     raise Exception("Not implemented")
 

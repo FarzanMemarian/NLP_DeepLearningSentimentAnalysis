@@ -8,6 +8,8 @@ from pdb import set_trace
 if __name__=="__main__":
     # MAKE THE DATA
     # Synthetic data for XOR: y = x0 XOR x1
+
+
     train_xs = np.array([[0, 0], [0, 1], [0, 1], [1, 0], [1, 0], [1, 1]])
     train_ys = np.array([0, 1, 1, 1, 1, 0])
     # Define some constants
@@ -36,7 +38,6 @@ if __name__=="__main__":
     # Convert a value-based representation (e.g., [2]) into the one-hot representation ([0, 0, 1])
     # Because label is a tensor of dimension one, the one-hot is actually [[0, 0, 1]], so
     # we need to flatten it.
-    set_trace()
     label_onehot = tf.reshape(tf.one_hot(label, num_classes), shape=[num_classes])
     loss = tf.negative(tf.log(tf.tensordot(probs, label_onehot, 1)))
 
@@ -55,7 +56,7 @@ if __name__=="__main__":
                                     global_step,
                                     decay_steps,
                                     learning_rate_decay_factor,
-                                    staircase=True)
+                                   staircase=True)
     # Logging with Tensorboard
     tf.summary.scalar('learning_rate', lr)
     tf.summary.scalar('loss', loss)
@@ -91,6 +92,7 @@ if __name__=="__main__":
             for ex_idx in xrange(0, len(train_xs)):
                 # sess.run generally evaluates variables in the computation graph given inputs. "Evaluating" train_op
                 # causes training to happen
+                set_trace()
                 [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], feed_dict = {fx: train_xs[ex_idx],
                                                                                   label: np.array([train_ys[ex_idx]])})
                 train_writer.add_summary(summary, step_idx)
