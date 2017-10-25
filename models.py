@@ -29,7 +29,6 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     # Labels
     train_labels_arr = np.array([ex.label for ex in train_exs])
 
-
     # Inputs are of size 2
     feat_vec_size = len(word_vectors.vectors[0])
     # Let's use 10 hidden units
@@ -50,8 +49,9 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     z = tf.sigmoid(tf.tensordot(V, fx, 1))
     W = tf.get_variable("W", [num_classes, embedding_size])
     probs = tf.nn.softmax(tf.tensordot(W, z, 1))
+    unscaled_log_prob= tf.log(tf.tensordot(W, z, 1))
     # This is the actual prediction -- not used for training but used for inference
-    one_best = tf.argmax(probs)   
+    one_best = tf.argmax(probs)         
 
     # Input for the gold label so we can compute the loss
     label = tf.placeholder(tf.int32, 1)
@@ -60,6 +60,7 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     # we need to flatten it.
     label_onehot = tf.reshape(tf.one_hot(label, num_classes), shape=[num_classes])
     loss = tf.negative(tf.log(tf.tensordot(probs, label_onehot, 1)))
+    # loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label, logits=unscaled_log_prob)
 
 
     # *************************************************
@@ -68,7 +69,7 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     # TRAINING ALGORITHM CUSTOMIZATION
     # Decay the learning rate by a factor of 0.99 every 10 gradient steps (for larger datasets you'll want a slower
     # weight decay schedule
-    decay_steps = 10
+    decay_steps = 1000
     learning_rate_decay_factor = 0.99
     global_step = tf.contrib.framework.get_or_create_global_step()
     # Smaller learning rates are sometimes necessary for larger networks
@@ -116,6 +117,9 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
             loss_this_iter = 0
             # batch_size of 1 here; if we want bigger batches, we need to build our network appropriately
             for ex_idx, train_example in enumerate(train_exs):
+
+                # In the next four lines we calculate the mean of the word vectors
+                # for the current sentence
                 sum_vec = np.zeros(len(word_vectors.vectors[0]))
                 for idx in train_example.indexed_words:
                     sum_vec += word_vectors.vectors[idx]
@@ -123,15 +127,14 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
 
                 # sess.run generally evaluates variables in the computation graph given inputs. "Evaluating" train_op
                 # causes training to happen
-                # set_trace()
-                [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], feed_dict = {fx: mean_vec,
-                                                                                  label: np.array([train_example.label])})
+                [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], 
+                                feed_dict = {fx: mean_vec,        label: np.array([train_example.label])})
                 train_writer.add_summary(summary, step_idx)
                 step_idx += 1
-                set_trace()
+                # set_trace()
                 loss_this_iter += loss_this_instance
-
-
+                set_trace()
+            set_trace()
             print "Loss for iteration " + repr(i) + ": " + repr(loss_this_iter)
         # Evaluate on the train set
         train_correct = 0
@@ -143,8 +146,9 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
 
             # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
             # quantities from the running of the computation graph, namely the probabilities, prediction, and z
-            [probs_this_instance, pred_this_instance, z_this_instance] = sess.run([probs, one_best, z],
-                                                                                  feed_dict={fx: mean_vec})
+            [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], feed_dict = {fx: train_xs[ex_idx],
+                                                                              label: np.array([train_ys[ex_idx]])})
+
             if (train_example.label == pred_this_instance):
                 train_correct += 1
             print "Example " + repr(mean_vec) + "; gold = " + repr(train_example.label) + "; pred = " +\
