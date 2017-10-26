@@ -21,7 +21,7 @@ class SentimentExample:
 
 # Reads sentiment examples in the format [0 or 1]<TAB>[raw sentence]; tokenizes and indexes the sentence according
 # to the vocabulary in indexer. If add_to_indexer is False, replaces unseen words with UNK, otherwise grows the
-# indexer. word_counter optionally keeps a tally of how many times each word is seen (mostly for logging purposes).
+# indexer. word_counter optionally keeps a taflly of how many times each word is seen (mostly for logging purposes).
 def read_and_index_sentiment_examples(infile, indexer, add_to_indexer=False, word_counter=None):
     f = open(infile)
     exs = []

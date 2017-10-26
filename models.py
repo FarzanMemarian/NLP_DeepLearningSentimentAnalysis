@@ -19,7 +19,7 @@ def pad_to_length(np_arr, length):
 # predictions on the *blind* test_exs (all test_exs have label 0 as a dummy placeholder value). Returned predictions
 # should be SentimentExample objects with predicted labels and the same sentences as input (but these won't be
 # read for evaluation anyway)
-def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
+def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, init_lr):
     # 59 is the max sentence length in the corpus, so let's set this to 60
     seq_max_len = 60
     # To get you started off, we'll pad the training input to 60 words to make it a square matrix.
@@ -32,7 +32,7 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     # Inputs are of size 2
     feat_vec_size = len(word_vectors.vectors[0])
     # Let's use 10 hidden units
-    embedding_size = 1000
+    embedding_size = hidden_size
     # We're using 2 classes. What's presented here is multi-class code that can scale to more classes, though
     # slightly more compact code for the binary case is possible.
     num_classes = 2
@@ -69,11 +69,11 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     # TRAINING ALGORITHM CUSTOMIZATION
     # Decay the learning rate by a factor of 0.99 every 10 gradient steps (for larger datasets you'll want a slower
     # weight decay schedule
-    decay_steps = 1000
+    decay_steps = 100
     learning_rate_decay_factor = 0.99
     global_step = tf.contrib.framework.get_or_create_global_step()
     # Smaller learning rates are sometimes necessary for larger networks
-    initial_learning_rate = 0.1
+    initial_learning_rate = init_lr
     # Decay the learning rate exponentially based on the number of steps.
     lr = tf.train.exponential_decay(initial_learning_rate,
                                     global_step,
@@ -100,7 +100,7 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
     # RUN TRAINING AND TEST
     # Initializer; we need to run this first to initialize variables
     init = tf.global_variables_initializer()
-    num_epochs = 10
+    num_epochs = epochs
     merged = tf.summary.merge_all()  # merge all the tensorboard variables
     # The computation graph must be run in a particular Tensorflow "session". Parameters, etc. are localized to the
     # session (unless you pass them around outside it). All runs of a computation graph with certain values are relative
@@ -133,11 +133,13 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
                 step_idx += 1
                 # set_trace()
                 loss_this_iter += loss_this_instance
-                set_trace()
-            set_trace()
+                # set_trace()
+            loss_this_iter /= len(train_exs)
             print "Loss for iteration " + repr(i) + ": " + repr(loss_this_iter)
         # Evaluate on the train set
         train_correct = 0
+        predictions = []
+
         for ex_idx, train_example in enumerate(train_exs):
             sum_vec = np.zeros(len(word_vectors.vectors[0]))
             for idx in train_example.indexed_words:
@@ -146,19 +148,18 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors):
 
             # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
             # quantities from the running of the computation graph, namely the probabilities, prediction, and z
-            [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], feed_dict = {fx: train_xs[ex_idx],
-                                                                              label: np.array([train_ys[ex_idx]])})
+            [probs_this_instance, pred_this_instance, z_this_instance] = sess.run([probs, one_best, z],
+                                                                      feed_dict={fx: mean_vec})
 
             if (train_example.label == pred_this_instance):
                 train_correct += 1
-            print "Example " + repr(mean_vec) + "; gold = " + repr(train_example.label) + "; pred = " +\
-                  repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
-            print "  Hidden layer activations for this example: " + repr(z_this_instance)
+            print "Example " + "; gold = " + repr(train_example.label) + "; pred = " +\
+                   repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
+            # print "  Hidden layer activations for this example: " + repr(z_this_instance)
+            prediction = SentimentExample(train_example.indexed_words, pred_this_instance)
+            predictions.append(prediction)
         print repr(train_correct) + "/" + repr(len(train_exs)) + " correct after training"
-
-    raise Exception("Not implemented")
-
-
-# Analogous to train_ffnn, but trains your fancier model.
-def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
-    raise Exception("Not implemented")
+        return predictions
+# Returned predictions
+# should be SentimentExample objects with predicted labels and the same sentences as input (but these won't be
+# read for evaluation anyway)

@@ -1,0 +1,2 @@
+CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=5 --hidden_size=1000
+

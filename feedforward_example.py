@@ -2,7 +2,7 @@
 
 import tensorflow as tf
 import numpy as np
-import pdb
+from pdb import set_trace
 
 # Example of training a feedforward network with one hidden layer to solve XOR.
 if __name__=="__main__":
@@ -89,12 +89,12 @@ if __name__=="__main__":
             for ex_idx in xrange(0, len(train_xs)):
                 # sess.run generally evaluates variables in the computation graph given inputs. "Evaluating" train_op
                 # causes training to happen
-                set_trace()
                 [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], feed_dict = {fx: train_xs[ex_idx],
                                                                                   label: np.array([train_ys[ex_idx]])})
                 train_writer.add_summary(summary, step_idx)
                 step_idx += 1
                 loss_this_iter += loss_this_instance
+            loss_this_iter /= len(train_xs)
             print "Loss for iteration " + repr(i) + ": " + repr(loss_this_iter)
         # Evaluate on the train set
         train_correct = 0
