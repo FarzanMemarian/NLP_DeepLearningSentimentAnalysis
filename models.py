@@ -133,7 +133,6 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, 
                 step_idx += 1
                 # set_trace()
                 loss_this_iter += loss_this_instance
-                # set_trace()
             loss_this_iter /= len(train_exs)
             print "Loss for iteration " + repr(i) + ": " + repr(loss_this_iter)
         # Evaluate on the train set
