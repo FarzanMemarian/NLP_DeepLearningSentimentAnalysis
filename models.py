@@ -19,7 +19,7 @@ def pad_to_length(np_arr, length):
 # predictions on the *blind* test_exs (all test_exs have label 0 as a dummy placeholder value). Returned predictions
 # should be SentimentExample objects with predicted labels and the same sentences as input (but these won't be
 # read for evaluation anyway)
-def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, init_lr):
+def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, init_lr, d_s, lrdf):
     # 59 is the max sentence length in the corpus, so let's set this to 60
     seq_max_len = 60
     # To get you started off, we'll pad the training input to 60 words to make it a square matrix.
@@ -46,8 +46,16 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, 
     # Other initializers like tf.random_normal_initializer are possible too
     V = tf.get_variable("V", [embedding_size, feat_vec_size], initializer=tf.contrib.layers.xavier_initializer(seed=0))
     # Can use other nonlinearities: tf.nn.relu, tf.tanh, etc.   
-    z = tf.sigmoid(tf.tensordot(V, fx, 1))
-    W = tf.get_variable("W", [num_classes, embedding_size])
+    z = tf.nn.relu(tf.tensordot(V, fx, 1))
+
+    # V2 = tf.get_variable("V2", [embedding_size, embedding_size], initializer=tf.contrib.layers.xavier_initializer(seed=1))
+    # # z2 is activation of second hidden layer
+    # z2 = tf.nn.relu(tf.tensordot(V2, z, 1))
+
+    # not explicitly initialized version of W
+    # W = tf.get_variable("W", [num_classes, embedding_size]) 
+    # explicitly initialized version of W
+    W = tf.get_variable("W", [num_classes, embedding_size], initializer=tf.contrib.layers.xavier_initializer(seed=0))
     probs = tf.nn.softmax(tf.tensordot(W, z, 1))
     unscaled_log_prob= tf.log(tf.tensordot(W, z, 1))
     # This is the actual prediction -- not used for training but used for inference
@@ -69,8 +77,8 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, 
     # TRAINING ALGORITHM CUSTOMIZATION
     # Decay the learning rate by a factor of 0.99 every 10 gradient steps (for larger datasets you'll want a slower
     # weight decay schedule
-    decay_steps = 100
-    learning_rate_decay_factor = 0.99
+    decay_steps = d_s
+    learning_rate_decay_factor = lrdf
     global_step = tf.contrib.framework.get_or_create_global_step()
     # Smaller learning rates are sometimes necessary for larger networks
     initial_learning_rate = init_lr
@@ -116,49 +124,93 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, 
         for i in range(0, num_epochs):
             loss_this_iter = 0
             # batch_size of 1 here; if we want bigger batches, we need to build our network appropriately
-            for ex_idx, train_example in enumerate(train_exs):
+            for ex_idx, example in enumerate(train_exs):
 
                 # In the next four lines we calculate the mean of the word vectors
                 # for the current sentence
                 sum_vec = np.zeros(len(word_vectors.vectors[0]))
-                for idx in train_example.indexed_words:
+                for idx in example.indexed_words:
                     sum_vec += word_vectors.vectors[idx]
-                mean_vec = sum_vec/len(train_example.indexed_words)
+                mean_vec = sum_vec/len(example.indexed_words)
 
                 # sess.run generally evaluates variables in the computation graph given inputs. "Evaluating" train_op
                 # causes training to happen
                 [_, loss_this_instance, summary] = sess.run([train_op, loss, merged], 
-                                feed_dict = {fx: mean_vec,        label: np.array([train_example.label])})
+                                feed_dict = {fx: mean_vec,        label: np.array([example.label])})
                 train_writer.add_summary(summary, step_idx)
                 step_idx += 1
                 # set_trace()
                 loss_this_iter += loss_this_instance
             loss_this_iter /= len(train_exs)
             print "Loss for iteration " + repr(i) + ": " + repr(loss_this_iter)
+        
+
         # Evaluate on the train set
         train_correct = 0
-        predictions = []
-
-        for ex_idx, train_example in enumerate(train_exs):
+        for ex_idx, example in enumerate(train_exs):
             sum_vec = np.zeros(len(word_vectors.vectors[0]))
-            for idx in train_example.indexed_words:
+            for idx in example.indexed_words:
                 sum_vec += word_vectors.vectors[idx]
-            mean_vec = sum_vec/len(train_example.indexed_words)
+            mean_vec = sum_vec/len(example.indexed_words)
 
             # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
             # quantities from the running of the computation graph, namely the probabilities, prediction, and z
             [probs_this_instance, pred_this_instance, z_this_instance] = sess.run([probs, one_best, z],
                                                                       feed_dict={fx: mean_vec})
-
-            if (train_example.label == pred_this_instance):
+            if (example.label == pred_this_instance):
                 train_correct += 1
-            print "Example " + "; gold = " + repr(train_example.label) + "; pred = " +\
-                   repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
+            # print "Example " + "; gold = " + repr(example.label) + "; pred = " +\
+            #        repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
+            
             # print "  Hidden layer activations for this example: " + repr(z_this_instance)
-            prediction = SentimentExample(train_example.indexed_words, pred_this_instance)
-            predictions.append(prediction)
+        print "results for training set:"
         print repr(train_correct) + "/" + repr(len(train_exs)) + " correct after training"
-        return predictions
+
+        # Evaluate on the dev set
+        train_correct = 0
+        for ex_idx, example in enumerate(dev_exs):
+            sum_vec = np.zeros(len(word_vectors.vectors[0]))
+            for idx in example.indexed_words:
+                sum_vec += word_vectors.vectors[idx]
+            mean_vec = sum_vec/len(example.indexed_words)
+
+            # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
+            # quantities from the running of the computation graph, namely the probabilities, prediction, and z
+            [probs_this_instance, pred_this_instance, z_this_instance] = sess.run([probs, one_best, z],
+                                                                      feed_dict={fx: mean_vec})
+            if (example.label == pred_this_instance):
+                train_correct += 1
+            # print "Example " + "; gold = " + repr(example.label) + "; pred = " +\
+            #        repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
+            # print "  Hidden layer activations for this example: " + repr(z_this_instance)
+        print "results for dev set:"
+        print repr(train_correct) + "/" + repr(len(dev_exs)) + " correct after training"
+
+        # Evaluate on the test set
+        train_correct = 0
+        predictions_test = []
+        for ex_idx, example in enumerate(test_exs):
+            sum_vec = np.zeros(len(word_vectors.vectors[0]))
+            for idx in example.indexed_words:
+                sum_vec += word_vectors.vectors[idx]
+            mean_vec = sum_vec/len(example.indexed_words)
+            # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
+            # quantities from the running of the computation graph, namely the probabilities, prediction, and z
+            [probs_this_instance, pred_this_instance, z_this_instance] = sess.run([probs, one_best, z],
+                                                                      feed_dict={fx: mean_vec})
+            if (example.label == pred_this_instance):
+                train_correct += 1
+            # print "Example " + "; gold = " + repr(example.label) + "; pred = " +\
+            #        repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
+            # print "  Hidden layer activations for this example: " + repr(z_this_instance)
+            prediction = SentimentExample(example.indexed_words, pred_this_instance)
+            predictions_test.append(prediction)
+        print "results for test set:"
+        print repr(train_correct) + "/" + repr(len(test_exs)) + " correct after training"
+
+
+
+        return predictions_test
 # Returned predictions
 # should be SentimentExample objects with predicted labels and the same sentences as input (but these won't be
 # read for evaluation anyway)
