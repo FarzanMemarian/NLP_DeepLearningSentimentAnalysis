@@ -7,7 +7,8 @@ from sentiment_data import *
 from pdb import set_trace
 from random import randint
 import datetime
-
+from tqdm import tqdm
+from random import shuffle
 
 # Returns a new numpy array with the data from np_arr padded to be of length length. If length is less than the
 # length of the base array, truncates instead.
@@ -29,11 +30,11 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
     # Labels
     train_labels_arr = np.array([ex.label for ex in train_exs])
 
-    batchSize = 24
-    lstmUnits = 60
+    batchSize = 50
+    lstmUnits = 64
     numClasses = 2
     num_train = len(train_mat)
-    train_iterations = 100
+    train_iterations = 10000
 
 
     def getTrainBatch():
@@ -46,9 +47,9 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
             # else:
             #     num = randint(13499,24999)
             #     labels.append([0,1])
-            num = randint(1,num_train)
-            arr[i,:] = train_mat[num-1:num,:]
-            labels.append(train_labels_arr[i]) 
+            num = randint(0,num_train-1)
+            arr[i,:] = train_mat[num,:]
+            labels.append(train_labels_arr[num]) 
         # set_trace()
         return arr, labels
 
@@ -77,13 +78,15 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
     accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
 
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
-    optimizer = tf.train.AdamOptimizer().minimize(loss)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999,).minimize(loss)
 
 
-
-
-
-
+    # TensorFlow
+    tf.summary.scalar('Loss', loss)
+    tf.summary.scalar('Accuracy', accuracy)
+    merged = tf.summary.merge_all()
+    # logdir = "tensorboard/part2/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+    logdir = "tensorboard/part2/" + "run1" + "/"
     # *************************************************
     # *************************************************
     # *************************************************
@@ -97,14 +100,10 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
     from sklearn.preprocessing import LabelEncoder
     
 
-    # TensorFlow
-    tf.summary.scalar('Loss', loss)
-    tf.summary.scalar('Accuracy', accuracy)
-    merged = tf.summary.merge_all()
-    logdir = "tensorboard/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+
     writer = tf.summary.FileWriter(logdir, sess.graph)
 
-    from tqdm import tqdm
+    
     for i in tqdm(range(train_iterations)):
         #Next Batch of reviews
         nextBatch, nextBatchLabels_non_one_hot = getTrainBatch();
@@ -117,7 +116,7 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
         onehot_encoder = OneHotEncoder(sparse=False)
         integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
         nextBatchLabels = onehot_encoder.fit_transform(integer_encoded)
-       
+
 
         # enc = OneHotEncoder(n_values=2, sparse=False, dtype="int32")
         # # set_trace()
@@ -130,21 +129,19 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
 
 
         # Write summary to Tensorboard
-        if (i % 50 == 0):
+        if (i % 300 == 0):
             summary = sess.run(merged, {input_data: nextBatch, labels: nextBatchLabels})
             writer.add_summary(summary, i)
 
         # Save the network every 10,000 training iterations
-        if (i % 10000 == 0 and i != 0):
+        if (i % 100 == 0 and i != 0):
             save_path = saver.save(sess, "models/training_lstm.ckpt", global_step=i)
             print("saved to %s" % save_path)
-        writer.close()
+    writer.close()
 
 
 
     # evaluate on training set
-    sess = tf.InteractiveSession()
-    saver = tf.train.Saver()
     iterations = 10
     total_loss = 0.
     average_accuracy = 0.
@@ -172,11 +169,10 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
         nextBatchLabels = onehot_encoder.fit_transform(integer_encoded)
         # print(onehot_encoded)
 
-        set_trace()
-        accuracy1, loss1, prediction1, labels1 = sess.run([accuracy, loss, prediction, labels], 
-                        {input_data: nextBatch, labels: nextBatchLabels})
-        print "prediction this batch: ", prediction1
-        print "labels this batch: ", labels1
+        [accuracy1, loss1, prediction1, labels1] = sess.run([accuracy, loss, prediction, labels], 
+                                        {input_data: nextBatch, labels: nextBatchLabels})
+        # print "prediction this batch: ", prediction1
+        # print "labels this batch: ", labels1
         # set_trace()
         print "loss this batch: ", loss1
         print "accuracy this batch: ", accuracy1
@@ -184,41 +180,12 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
         average_accuracy += accuracy1
     average_loss = total_loss / iterations
     print "average_loss: ", average_loss
-    print "average_accuracy: ", average_accuracy/iterations
-    set_trace()
+    print "average_accuracy: ", average_accuracy / iterations
 
 
 
-    # # Evaluate on the training set
-    # train_correct = 0
-    # predictions_test = []
-    
-    # train_data = train_mat
-    # labels = train_labels_arr
 
-    # enc = OneHotEncoder(n_values=2, sparse=False, dtype="int32")
-    # # set_trace()
-    # labels_rolled =  enc.fit_transform(labels).tolist()[0]
-    # labels_hot = []
-    # for j in range(len(labels)):
-    #     labels_hot.append(labels_rolled[ 2*j : 2*j+2])
-    # set_trace()
-    # # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
-    # # quantities from the running of the computation graph, namely the probabilities, prediction, and z
-    # # [correctPred, accuracy, loss, prediction] = sess.run([correctPred, accuracy, loss, prediction],
-    # #                                     {input_data: data, labels: labels_hot})
-    # sess.run(loss, {input_data: train_data, labels: labels_hot})
-    # set_trace()
-    # if (example.label == pred_this_instance):
-    #     train_correct += 1
-    # # print "Example " + "; gold = " + repr(example.label) + "; pred = " +\
-    # #        repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
-    # # print "  Hidden layer activations for this example: " + repr(z_this_instance)
-    # prediction = SentimentExample(example.indexed_words, pred_this_instance)
-    # predictions_test.append(prediction)
-    # print "results for test set:"
-    # print repr(train_correct) + "/" + repr(len(test_exs)) + " correct after training"
-    # return predictions_test
+
 
 
 
@@ -322,16 +289,16 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, 
     # to a particular session
     with tf.Session() as sess:
         # Write a logfile to the logs/ directory, can use Tensorboard to view this
-        train_writer = tf.summary.FileWriter('logs/', sess.graph)
+        train_writer = tf.summary.FileWriter('tensorboard/part1', sess.graph)
         # Generally want to determinize training as much as possible
         tf.set_random_seed(0)
         # Initialize variables
         sess.run(init)
         step_idx = 0
-        for i in range(0, num_epochs):
+        for i in tqdm(range(0, num_epochs)):
             loss_this_iter = 0
             # batch_size of 1 here; if we want bigger batches, we need to build our network appropriately
-            for ex_idx, example in enumerate(train_exs):
+            for ex_idx, example in tqdm(enumerate(train_exs)):
 
                 # In the next four lines we calculate the mean of the word vectors
                 # for the current sentence

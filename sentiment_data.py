@@ -45,7 +45,6 @@ def read_and_index_sentiment_examples(infile, indexer, add_to_indexer=False, wor
 # out is tokenized and contains UNKs, so this will not exactly match the input file.
 def write_sentiment_examples(exs, outfile, indexer):
     o = open(outfile, 'w')
-    set_trace()
     for ex in exs:
         o.write(repr(ex.label) + "\t" + " ".join([indexer.get_object(idx) for idx in ex.indexed_words]) + "\n")
     o.close()

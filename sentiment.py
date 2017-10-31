@@ -42,8 +42,9 @@ if __name__ == '__main__':
         test_exs_predicted = train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hid_step_sz, init_lr, dec_step, lrdf)
         write_sentiment_examples(test_exs_predicted, "test-blind.output.txt", word_vectors.word_indexer)
     elif system_to_run == "FANCY":
-        test_exs_predicted = train_fancy(train_exs, dev_exs, test_exs, word_vectors)
+        # test_exs_predicted = train_fancy(train_exs, dev_exs, test_exs, word_vectors)
+        train_fancy(train_exs, dev_exs, test_exs, word_vectors)
     else:
         raise Exception("Pass in either FF or FANCY to run the appropriate system")
     # Write the test set output
-    write_sentiment_examples(test_exs_predicted, "test-blind.output.txt", word_vectors.word_indexer)
+    # write_sentiment_examples(test_exs_predicted, "test-blind.output.txt", word_vectors.word_indexer)
