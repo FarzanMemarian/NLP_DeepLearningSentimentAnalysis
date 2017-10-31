@@ -1,9 +1,9 @@
 # LONG WHOLE TRAINING DATA
-CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=5 --h_s=8530 --init_lr=0.01  --d_s=100 --lrdf=0.99
+CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=5 --hid_step_sz=8530 --init_lr=0.01  --dec_step=100 --lrdf=0.99
 
 
 # ABRIDGED TRAINING DATA
-CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=1000 --epochs=2 --h_s=1000 --init_lr=0.01  --d_s=100 --lrdf=0.99
+CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=1000 --epochs=2 --hid_step_sz=1000 --init_lr=0.01  --dec_step=100 --lrdf=0.99
 
 
-CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=1000 --epochs=5 --h_s=1000 --init_lr=0.01  --d_s=100 --lrdf=0.99
+CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=1000 --epochs=5 --hid_step_sz=1000 --init_lr=0.01  --dec_step=100 --lrdf=0.99
