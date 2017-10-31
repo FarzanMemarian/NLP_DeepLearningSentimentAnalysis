@@ -6,6 +6,7 @@ import random
 from sentiment_data import *
 from pdb import set_trace
 from random import randint
+import datetime
 
 
 # Returns a new numpy array with the data from np_arr padded to be of length length. If length is less than the
@@ -16,66 +17,55 @@ def pad_to_length(np_arr, length):
     return result
 
 
-def getTrainBatch():
-    labels = []
-    arr = np.zeros([batchSize, maxSeqLength])
-    for i in range(batchSize):
-        if (i % 2 == 0): 
-            num = randint(1,11499)
-            labels.append([1,0])
-        else:
-            num = randint(13499,24999)
-            labels.append([0,1])
-        arr[i] = ids[num-1:num]
-    return arr, labels
-
-def getTestBatch():
-    labels = []
-    arr = np.zeros([batchSize, maxSeqLength])
-    for i in range(batchSize):
-        num = randint(11499,13499)
-        if (num <= 12499):
-            labels.append([1,0])
-        else:
-            labels.append([0,1])
-        arr[i] = ids[num-1:num]
-    return arr, labels
-
-
 def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
+    maxSeqLength = 60 #Maximum length of sentence
+    numDimensions = 300 #Dimensions for each word vector
     # 59 is the max sentence length in the corpus, so let's set this to 60
-    seq_max_len = 60
+    # seq_max_len = 60
     # To get you started off, we'll pad the training input to 60 words to make it a square matrix.
-    train_mat = np.asarray([pad_to_length(np.array(ex.indexed_words), seq_max_len) for ex in train_exs])
+    train_mat = np.asarray([pad_to_length(np.array(ex.indexed_words), maxSeqLength) for ex in train_exs])
     # Also store the sequence lengths -- this could be useful for training LSTMs
     train_seq_lens = np.array([len(ex.indexed_words) for ex in train_exs])
     # Labels
     train_labels_arr = np.array([ex.label for ex in train_exs])
 
-    maxSeqLength = 10 #Maximum length of sentence
-    numDimensions = 300 #Dimensions for each word vector
     batchSize = 24
-    lstmUnits = 64
+    lstmUnits = 60
     numClasses = 2
-    iterations = 100000
-    set_trace()
+    num_train = len(train_mat)
+    train_iterations = 100
 
+
+    def getTrainBatch():
+        labels = []
+        arr = np.zeros([batchSize, maxSeqLength])
+        for i in range(batchSize):
+            # if (i % 2 == 0): 
+            #     num = randint(1,13499)
+            #     labels.append([1,0])
+            # else:
+            #     num = randint(13499,24999)
+            #     labels.append([0,1])
+            num = randint(1,num_train)
+            arr[i,:] = train_mat[num-1:num,:]
+            labels.append(train_labels_arr[i]) 
+        # set_trace()
+        return arr, labels
+
+     
     # *************************************************
     # *************************************************
     # *************************************************
     # DEFINING THE COMPUTATION GRAPH
     # Define the core neural network
     tf.reset_default_graph()
-
     labels = tf.placeholder(tf.float32, [batchSize, numClasses])
     input_data = tf.placeholder(tf.int32, [batchSize, maxSeqLength])
-
     data = tf.Variable(tf.zeros([batchSize, maxSeqLength, numDimensions]),dtype=tf.float32)
-    data = tf.nn.embedding_lookup(wordVectors,input_data)
-
+    data = tf.nn.embedding_lookup(word_vectors.vectors,input_data)
     lstmCell = tf.contrib.rnn.BasicLSTMCell(lstmUnits)
-    lstmCell = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.25)
-    value, _ = tf.nn.dynamic_rnn(lstmCell, data, dtype=tf.float32)
+    lstmCell = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.75)
+    value, state = tf.nn.dynamic_rnn(lstmCell, data, dtype=tf.float32)
 
     weight = tf.Variable(tf.truncated_normal([lstmUnits, numClasses]))
     bias = tf.Variable(tf.constant(0.1, shape=[numClasses]))
@@ -86,54 +76,149 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
     correctPred = tf.equal(tf.argmax(prediction,1), tf.argmax(labels,1))
     accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
 
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
+    optimizer = tf.train.AdamOptimizer().minimize(loss)
 
-    # load in the network
+
+
+
+
+
+    # *************************************************
+    # *************************************************
+    # *************************************************
+    # Training
     sess = tf.InteractiveSession()
     saver = tf.train.Saver()
-    saver.restore(sess, tf.train.latest_checkpoint('models'))
+    sess.run(tf.global_variables_initializer())
 
 
-    # 
-    numFiles = len(train_exs)
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.preprocessing import LabelEncoder
+    
 
-    ids = np.zeros((numFiles, maxSeqLength), dtype='int32')
-    fileCounter = 0
-    for pf in positiveFiles:
-       with open(pf, "r") as f:
-           indexCounter = 0
-           line=f.readline()
-           cleanedLine = cleanSentences(line)
-           split = cleanedLine.split()
-           for word in split:
-               try:
-                   ids[fileCounter][indexCounter] = wordsList.index(word)
-               except ValueError:
-                   ids[fileCounter][indexCounter] = 399999 #Vector for unkown words
-               indexCounter = indexCounter + 1
-               if indexCounter >= maxSeqLength:
-                   break
-           fileCounter = fileCounter + 1 
+    # TensorFlow
+    tf.summary.scalar('Loss', loss)
+    tf.summary.scalar('Accuracy', accuracy)
+    merged = tf.summary.merge_all()
+    logdir = "tensorboard/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+    writer = tf.summary.FileWriter(logdir, sess.graph)
 
-    for nf in negativeFiles:
-       with open(nf, "r") as f:
-           indexCounter = 0
-           line=f.readline()
-           cleanedLine = cleanSentences(line)
-           split = cleanedLine.split()
-           for word in split:
-               try:
-                   ids[fileCounter][indexCounter] = wordsList.index(word)
-               except ValueError:
-                   ids[fileCounter][indexCounter] = 399999 #Vector for unkown words
-               indexCounter = indexCounter + 1
-               if indexCounter >= maxSeqLength:
-                   break
-           fileCounter = fileCounter + 1 
-    #Pass into embedding function and see if it evaluates. 
+    from tqdm import tqdm
+    for i in tqdm(range(train_iterations)):
+        #Next Batch of reviews
+        nextBatch, nextBatchLabels_non_one_hot = getTrainBatch();
+        
+        # one-hot encoding of the labels
+        # integer encode
+        label_encoder = LabelEncoder()
+        integer_encoded = label_encoder.fit_transform(nextBatchLabels_non_one_hot)
+        # binary encode
+        onehot_encoder = OneHotEncoder(sparse=False)
+        integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
+        nextBatchLabels = onehot_encoder.fit_transform(integer_encoded)
+       
 
-    np.save('idsMatrix', ids)
+        # enc = OneHotEncoder(n_values=2, sparse=False, dtype="int32")
+        # # set_trace()
+        # nextBatchLabels_rolled =  enc.fit_transform(nextBatchLabels_non_one_hot).tolist()
+        # nextBatchLabels = []
+        # for j in range(len(nextBatchLabels_non_one_hot)):
+        #     nextBatchLabels.append(nextBatchLabels_rolled[0][ 2*j : 2*j+2])
+        # set_trace()
+        sess.run(optimizer, {input_data: nextBatch, labels: nextBatchLabels})
 
 
+        # Write summary to Tensorboard
+        if (i % 50 == 0):
+            summary = sess.run(merged, {input_data: nextBatch, labels: nextBatchLabels})
+            writer.add_summary(summary, i)
+
+        # Save the network every 10,000 training iterations
+        if (i % 10000 == 0 and i != 0):
+            save_path = saver.save(sess, "models/training_lstm.ckpt", global_step=i)
+            print("saved to %s" % save_path)
+        writer.close()
+
+
+
+    # evaluate on training set
+    sess = tf.InteractiveSession()
+    saver = tf.train.Saver()
+    iterations = 10
+    total_loss = 0.
+    average_accuracy = 0.
+
+
+    for i in range(iterations):
+        #Next Batch of reviews
+        nextBatch, nextBatchLabels_non_one_hot = getTrainBatch();
+        # nextBatchLabels = tf.one_hot(nextBatchLabels_non_one_hot,2)
+
+        # enc = OneHotEncoder(n_values=2, sparse=False, dtype="int32")
+        # # set_trace()
+        # nextBatchLabels_rolled =  enc.fit_transform(nextBatchLabels_non_one_hot).tolist()
+        # nextBatchLabels = []
+        # for j in range(len(nextBatchLabels_non_one_hot)):
+        #     nextBatchLabels.append(nextBatchLabels_rolled[0][ 2*j : 2*j+2])
+
+        # integer encode
+        label_encoder = LabelEncoder()
+        integer_encoded = label_encoder.fit_transform(nextBatchLabels_non_one_hot)
+        # print(integer_encoded)
+        # binary encode
+        onehot_encoder = OneHotEncoder(sparse=False, dtype="int32")
+        integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
+        nextBatchLabels = onehot_encoder.fit_transform(integer_encoded)
+        # print(onehot_encoded)
+
+        set_trace()
+        accuracy1, loss1, prediction1, labels1 = sess.run([accuracy, loss, prediction, labels], 
+                        {input_data: nextBatch, labels: nextBatchLabels})
+        print "prediction this batch: ", prediction1
+        print "labels this batch: ", labels1
+        # set_trace()
+        print "loss this batch: ", loss1
+        print "accuracy this batch: ", accuracy1
+        total_loss += loss1
+        average_accuracy += accuracy1
+    average_loss = total_loss / iterations
+    print "average_loss: ", average_loss
+    print "average_accuracy: ", average_accuracy/iterations
+    set_trace()
+
+
+
+    # # Evaluate on the training set
+    # train_correct = 0
+    # predictions_test = []
+    
+    # train_data = train_mat
+    # labels = train_labels_arr
+
+    # enc = OneHotEncoder(n_values=2, sparse=False, dtype="int32")
+    # # set_trace()
+    # labels_rolled =  enc.fit_transform(labels).tolist()[0]
+    # labels_hot = []
+    # for j in range(len(labels)):
+    #     labels_hot.append(labels_rolled[ 2*j : 2*j+2])
+    # set_trace()
+    # # Note that we only feed in the x, not the y, since we're not training. We're also extracting different
+    # # quantities from the running of the computation graph, namely the probabilities, prediction, and z
+    # # [correctPred, accuracy, loss, prediction] = sess.run([correctPred, accuracy, loss, prediction],
+    # #                                     {input_data: data, labels: labels_hot})
+    # sess.run(loss, {input_data: train_data, labels: labels_hot})
+    # set_trace()
+    # if (example.label == pred_this_instance):
+    #     train_correct += 1
+    # # print "Example " + "; gold = " + repr(example.label) + "; pred = " +\
+    # #        repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
+    # # print "  Hidden layer activations for this example: " + repr(z_this_instance)
+    # prediction = SentimentExample(example.indexed_words, pred_this_instance)
+    # predictions_test.append(prediction)
+    # print "results for test set:"
+    # print repr(train_correct) + "/" + repr(len(test_exs)) + " correct after training"
+    # return predictions_test
 
 
 

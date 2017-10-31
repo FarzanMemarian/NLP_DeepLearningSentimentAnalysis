@@ -45,6 +45,7 @@ def read_and_index_sentiment_examples(infile, indexer, add_to_indexer=False, wor
 # out is tokenized and contains UNKs, so this will not exactly match the input file.
 def write_sentiment_examples(exs, outfile, indexer):
     o = open(outfile, 'w')
+    set_trace()
     for ex in exs:
         o.write(repr(ex.label) + "\t" + " ".join([indexer.get_object(idx) for idx in ex.indexed_words]) + "\n")
     o.close()
@@ -99,8 +100,8 @@ def read_word_embeddings(embeddings_file):
             space_idx = line.find(' ')
             word = line[:space_idx]
             numbers = line[space_idx+1:]
-            float_numbers = [float(number_str) for number_str in numbers.split()]
-            #print repr(float_numbers)
+            float_numbers = [np.float32(number_str) for number_str in numbers.split()]
+                        #print repr(float_numbers)
             vector = np.array(float_numbers)
             word_indexer.get_index(word)
             vectors.append(vector)
@@ -111,7 +112,7 @@ def read_word_embeddings(embeddings_file):
     word_indexer.get_index("UNK")
     vectors.append(np.zeros(vectors[0].shape[0]))
     # Turn vectors into a 2-D numpy array
-    return WordEmbeddings(word_indexer, np.array(vectors))
+    return WordEmbeddings(word_indexer, np.array(vectors, dtype=np.float32))
 
 
 #################
