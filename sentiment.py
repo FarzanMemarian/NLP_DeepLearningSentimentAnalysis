@@ -17,6 +17,14 @@ if __name__ == '__main__':
     a.add_argument("--dec_step", default=100, type=int) # this is the decay step
     a.add_argument("--lrdf", default=0.99, type=float) # learning rate decay factor
     a.add_argument("--epochs", default=5 ,type=int)
+
+    # paramters specific to part 2
+    a.add_argument("--train_iter", default=1000, type=int)
+    a.add_argument("--batchSize", default=24, type=int)
+    a.add_argument("--lstmUnits", default=60, type=int)
+    a.add_argument("--learn_rate", default=0.001, type=float)
+    a.add_argument("--bidir", default=False, type=bool)
+
     args = a.parse_args()
     system_to_run = args.system_to_run
     nb_exm = args.nb_exm
@@ -25,6 +33,11 @@ if __name__ == '__main__':
     init_lr = args.init_lr
     dec_step = args.dec_step
     lrdf = args.lrdf
+    train_iter = args.train_iter
+    batchSize = args.batchSize
+    lstmUnits = args.lstmUnits
+    learn_rate = args.learn_rate
+    bidir = args.bidir
 
 
     # Use either 50-dim or 300-dim vectors
@@ -43,8 +56,9 @@ if __name__ == '__main__':
         write_sentiment_examples(test_exs_predicted, "test-blind.output.txt", word_vectors.word_indexer)
     elif system_to_run == "FANCY":
         # test_exs_predicted = train_fancy(train_exs, dev_exs, test_exs, word_vectors)
-        train_fancy(train_exs, dev_exs, test_exs, word_vectors)
+        test_exs_predicted = train_fancy(train_exs, dev_exs, test_exs, word_vectors, train_iter, 
+            batchSize, lstmUnits, learn_rate, bidir)
     else:
         raise Exception("Pass in either FF or FANCY to run the appropriate system")
     # Write the test set output
-    # write_sentiment_examples(test_exs_predicted, "test-blind.output.txt", word_vectors.word_indexer)
+    write_sentiment_examples(test_exs_predicted, "test-blind.output.txt", word_vectors.word_indexer)

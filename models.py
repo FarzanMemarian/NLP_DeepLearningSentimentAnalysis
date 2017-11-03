@@ -9,7 +9,9 @@ from random import randint
 import datetime
 from tqdm import tqdm
 from random import shuffle
-
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import LabelEncoder 
+import math
 # Returns a new numpy array with the data from np_arr padded to be of length length. If length is less than the
 # length of the base array, truncates instead.
 def pad_to_length(np_arr, length):
@@ -18,75 +20,175 @@ def pad_to_length(np_arr, length):
     return result
 
 
-def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
-    maxSeqLength = 60 #Maximum length of sentence
-    numDimensions = 300 #Dimensions for each word vector
+def train_fancy(train_exs, dev_exs, test_exs, word_vectors, 
+    train_iter=1000, batch_size=50, lstmUnits=64, learn_rate=0.001, bidir=False):
+    max_seq_length = 60 #Maximum length of sentence
+    num_dimensions = 300 #Dimensions for each word vector
     # 59 is the max sentence length in the corpus, so let's set this to 60
     # seq_max_len = 60
     # To get you started off, we'll pad the training input to 60 words to make it a square matrix.
-    train_mat = np.asarray([pad_to_length(np.array(ex.indexed_words), maxSeqLength) for ex in train_exs])
+    train_mat = np.asarray([pad_to_length(np.array(ex.indexed_words), max_seq_length) for ex in train_exs])
+    dev_mat = np.asarray([pad_to_length(np.array(ex.indexed_words), max_seq_length) for ex in dev_exs])
+    test_mat = np.asarray([pad_to_length(np.array(ex.indexed_words), max_seq_length) for ex in test_exs])
     # Also store the sequence lengths -- this could be useful for training LSTMs
     train_seq_lens = np.array([len(ex.indexed_words) for ex in train_exs])
+    dev_seq_lens = np.array([len(ex.indexed_words) for ex in dev_exs])
+    test_seq_lens = np.array([len(ex.indexed_words) for ex in test_exs])
     # Labels
     train_labels_arr = np.array([ex.label for ex in train_exs])
+    dev_labels_arr = np.array([ex.label for ex in dev_exs])
+    test_labels_arr = np.array([ex.label for ex in test_exs])
 
-    batchSize = 50
-    lstmUnits = 64
-    numClasses = 2
+    # batch_size=50
+    # lstmUnits = 64
+    num_classes = 2
     num_train = len(train_mat)
-    train_iterations = 10000
+    num_dev = len(dev_mat)
+    num_test = len(test_mat)
+    feat_vec_size = 300
 
 
-    def getTrainBatch():
+    def get_batch(batch_size=50, which_dataset="train"):
+
+         # costomize the function to the appropriate dataset
+        if which_dataset=="train":
+            dataset = train_mat
+            dataset_labels = train_labels_arr
+            seq_lens = train_seq_lens
+        elif which_dataset=="dev":
+            dataset = dev_mat
+            dataset_labels = dev_labels_arr
+            seq_lens = dev_seq_lens
+        elif which_dataset=="test":
+            dataset = test_mat
+            dataset_labels = test_labels_arr
+            seq_lens = test_seq_lens
+
         labels = []
-        arr = np.zeros([batchSize, maxSeqLength])
-        for i in range(batchSize):
-            # if (i % 2 == 0): 
-            #     num = randint(1,13499)
-            #     labels.append([1,0])
-            # else:
-            #     num = randint(13499,24999)
-            #     labels.append([0,1])
-            num = randint(0,num_train-1)
-            arr[i,:] = train_mat[num,:]
-            labels.append(train_labels_arr[num]) 
-        # set_trace()
-        return arr, labels
+        sequence_lengths = []
+        arr = np.zeros([batch_size, max_seq_length], dtype=int)
+        for i in range(batch_size):
+            ds_size = len(dataset)
+            num = randint(0,ds_size-1)
+            arr[i,:] = dataset[num,:]
+            labels.append(dataset_labels[num]) 
+            sequence_lengths.append(seq_lens[num])
 
-     
+        # one-hot encoding of the labels
+        # integer encode
+        label_encoder = LabelEncoder()
+        integer_encoded = label_encoder.fit_transform(labels)
+        # binary encode
+        onehot_encoder = OneHotEncoder(sparse=False)
+        integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
+        next_batch_labels = onehot_encoder.fit_transform(integer_encoded)
+        return arr, next_batch_labels, sequence_lengths
+
+    def get_ordered_data(batch_idx, which_dataset="train"):
+        if which_dataset=="train":
+            dataset = train_mat
+            dataset_labels = train_labels_arr
+            seq_lens = train_seq_lens
+        elif which_dataset=="dev":
+            dataset = dev_mat
+            dataset_labels = dev_labels_arr
+            seq_lens = dev_seq_lens
+        elif which_dataset=="test":
+            dataset = test_mat
+            dataset_labels = test_labels_arr
+            seq_lens = test_seq_lens
+
+        labels = []
+        sequence_lengths = []
+        arr = np.zeros([batch_size, max_seq_length], dtype=int)
+        idx = 0
+        for exm in range(batch_idx * batch_size, (batch_idx+1) * batch_size):
+            arr[idx,:] = dataset[exm,:]
+            labels.append(dataset_labels[exm]) 
+            sequence_lengths.append(seq_lens[exm])
+            idx += 1
+        # one-hot encoding of the labels
+        # integer encode
+        label_encoder = LabelEncoder()
+        integer_encoded = label_encoder.fit_transform(labels)
+        # binary encode
+        onehot_encoder = OneHotEncoder(sparse=False)
+        integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
+        next_batch_labels = onehot_encoder.fit_transform(integer_encoded)
+        return arr, next_batch_labels, sequence_lengths
+
+
+
+
     # *************************************************
     # *************************************************
     # *************************************************
     # DEFINING THE COMPUTATION GRAPH
-    # Define the core neural network
     tf.reset_default_graph()
-    labels = tf.placeholder(tf.float32, [batchSize, numClasses])
-    input_data = tf.placeholder(tf.int32, [batchSize, maxSeqLength])
-    data = tf.Variable(tf.zeros([batchSize, maxSeqLength, numDimensions]),dtype=tf.float32)
-    data = tf.nn.embedding_lookup(word_vectors.vectors,input_data)
-    lstmCell = tf.contrib.rnn.BasicLSTMCell(lstmUnits)
+    labels = tf.placeholder(tf.float32, [batch_size, num_classes])
+    input_data_idx = tf.placeholder(tf.int32, [batch_size, max_seq_length])
+    # data = tf.Variable(tf.zeros([batch_size, max_seq_length, num_dimensions]),dtype=tf.float32)
+    input_data = tf.placeholder(tf.float32, [batch_size, max_seq_length, num_dimensions])
+    input_data = tf.nn.embedding_lookup(word_vectors.vectors,input_data_idx)
+    seq_len = tf.placeholder(tf.int32, [batch_size])
+    # lstmCell = tf.contrib.rnn.BasicLSTMCell(lstmUnits)
+    lstmCell = tf.contrib.rnn.GRUCell(lstmUnits)
+    lstmCell_bw = tf.contrib.rnn.GRUCell(lstmUnits)
+    # lstmCell = tf.nn.BidirectionalGridLSTMCell(lstmUnits)
     lstmCell = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.75)
-    value, state = tf.nn.dynamic_rnn(lstmCell, data, dtype=tf.float32)
+    lstmCell_bw = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.75)
 
-    weight = tf.Variable(tf.truncated_normal([lstmUnits, numClasses]))
-    bias = tf.Variable(tf.constant(0.1, shape=[numClasses]))
+    z_state = lstmCell.zero_state(batch_size, tf.float32)
+    z_state_bw = lstmCell_bw.zero_state(batch_size, tf.float32)    
+    if bidir == True:
+        (rnn_outputs_fw, rnn_outputs_bw) , final_state = tf.nn.bidirectional_dynamic_rnn(lstmCell, lstmCell_bw, input_data, sequence_length=seq_len,
+                                         initial_state_fw=z_state, initial_state_bw=z_state_bw)
+        value = tf.concat([rnn_outputs_fw,rnn_outputs_bw],2)
+    else:
+        value, state = tf.nn.dynamic_rnn(lstmCell, input_data, dtype=tf.float32, time_major=False)
+    # value, state = tf.nn.static_rnn(lstmCell, input_data, dtype=tf.float32)
+
+    # weight = tf.Variable(tf.truncated_normal([lstmUnits, num_classes]))
+    weight = tf.get_variable("weight", [lstmUnits, num_classes], initializer=tf.contrib.layers.xavier_initializer(seed=3))
+    bias = tf.Variable(tf.constant(0.01, shape=[num_classes]))
     value = tf.transpose(value, [1, 0, 2])
-    last = tf.gather(value, int(value.get_shape()[0]) - 1)
-    prediction = (tf.matmul(last, weight) + bias)
+    average_val = tf.reduce_mean(tf.gather(value, tf.range(0, tf.reduce_max(seq_len))), axis=0)
+    # average_val = tf.reduce_mean(tf.gather(value, tf.range(0, tf.reduce_max(seq_len))), axis=1)
+    last = tf.gather(value, int(value.get_shape()[1]) - 1)
+    prediction = (tf.matmul(average_val, weight) + bias)
 
     correctPred = tf.equal(tf.argmax(prediction,1), tf.argmax(labels,1))
     accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
+    dev_accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
 
     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999,).minimize(loss)
+    dev_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
+    optimizer = tf.train.AdamOptimizer(learning_rate=learn_rate).minimize(loss)
+    # global_step = tf.contrib.framework.get_or_create_global_step()
+    # opt = tf.train.AdamOptimizer(learning_rate=learn_rate)
+    # # Loss is the thing that we're optimizing
+    # grads = opt.compute_gradients(loss)
+    # # Now that we have gradients, we operationalize them by defining an operator that actually applies them.
+    # apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+    # with tf.control_dependencies([apply_gradient_op]):
+    #     train_op = tf.no_op(name='train')
 
+    # optimizer = tf.train.GradientDescentOptimizer(learning_rate=learn_rate).minimize(loss)
+    # optimizer = tf.train.AdagradOptimizer(learning_rate=learn_rate).minimize(loss)
 
     # TensorFlow
-    tf.summary.scalar('Loss', loss)
-    tf.summary.scalar('Accuracy', accuracy)
+    tf.summary.scalar('Dev loss', dev_loss)
+    tf.summary.scalar('Dev accuracy', dev_accuracy)
+    merged1 = tf.summary.merge_all()
+    tf.summary.scalar('Train loss', loss)
+    tf.summary.scalar('Train Accuracy', accuracy)
+    tf.summary.scalar('weight', tf.reduce_sum(weight))
+    tf.summary.scalar('bias', tf.reduce_sum(bias))
+    # tf.summary.tensor_summary("value", value)
+    # tf.summary.scalar('average_val', tf.reduce_sum(average_val))
     merged = tf.summary.merge_all()
-    # logdir = "tensorboard/part2/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
-    logdir = "tensorboard/part2/" + "run1" + "/"
+    logdir = "tensorboard/part2/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + "/"
+    # logdir = "tensorboard/part2/" + "run1" + "/"
     # *************************************************
     # *************************************************
     # *************************************************
@@ -96,92 +198,134 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors):
     sess.run(tf.global_variables_initializer())
 
 
-    from sklearn.preprocessing import OneHotEncoder
-    from sklearn.preprocessing import LabelEncoder
-    
 
+    
 
     writer = tf.summary.FileWriter(logdir, sess.graph)
-
-    
-    for i in tqdm(range(train_iterations)):
+    min_dev_loss = np.exp(10)
+    for i in tqdm(range(train_iter)):
         #Next Batch of reviews
-        nextBatch, nextBatchLabels_non_one_hot = getTrainBatch();
+        next_batch, next_batch_labels, sequence_lengths = get_batch(batch_size, "train");
+        sess.run(optimizer, {input_data_idx: next_batch, labels: next_batch_labels, seq_len:sequence_lengths})
+        # sess.run(train_op, {input_data_idx: next_batch, labels: next_batch_labels, seq_len:sequence_lengths})
         
-        # one-hot encoding of the labels
-        # integer encode
-        label_encoder = LabelEncoder()
-        integer_encoded = label_encoder.fit_transform(nextBatchLabels_non_one_hot)
-        # binary encode
-        onehot_encoder = OneHotEncoder(sparse=False)
-        integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
-        nextBatchLabels = onehot_encoder.fit_transform(integer_encoded)
-
-
-        # enc = OneHotEncoder(n_values=2, sparse=False, dtype="int32")
-        # # set_trace()
-        # nextBatchLabels_rolled =  enc.fit_transform(nextBatchLabels_non_one_hot).tolist()
-        # nextBatchLabels = []
-        # for j in range(len(nextBatchLabels_non_one_hot)):
-        #     nextBatchLabels.append(nextBatchLabels_rolled[0][ 2*j : 2*j+2])
-        # set_trace()
-        sess.run(optimizer, {input_data: nextBatch, labels: nextBatchLabels})
-
-
         # Write summary to Tensorboard
-        if (i % 300 == 0):
-            summary = sess.run(merged, {input_data: nextBatch, labels: nextBatchLabels})
+        if (i % 50 == 0):
+            summary = sess.run(merged, {input_data_idx: next_batch, labels: next_batch_labels, seq_len:sequence_lengths})
             writer.add_summary(summary, i)
 
+
+            next_batch, next_batch_labels, sequence_lengths = get_batch(batch_size, "dev");
+            summary1 = sess.run(merged1, {input_data_idx: next_batch, labels: next_batch_labels, seq_len:sequence_lengths})
+            writer.add_summary(summary1, i)
+
+            # print "value shape", np.shape(value)
+            # print "average_val shape", np.shape(average_val)
+            # print "seq_len1 shape", np.shape(seq_len1)
+  test_exs_predicted          # print "data1 shape", np.shape(data1)
+            # print "last1 shape", np.shape(last1)
+
+        # if (i % 100 == 0):
+        #     correctPred1 = sess.run(correctPred, {input_data_idx: next_batch, labels: next_batch_labels, seq_len:sequence_lengths})
+        #     print "correctPred:", correctPred[1:5]
+
+
+
+
         # Save the network every 10,000 training iterations
-        if (i % 100 == 0 and i != 0):
-            save_path = saver.save(sess, "models/training_lstm.ckpt", global_step=i)
-            print("saved to %s" % save_path)
+        if (i % (train_iter/10) == 0 and i != 0):
+            ave_dev_loss = 0
+            ave_dev_acc = 0
+            num_dev_iter = 20
+            for j in range(num_dev_iter):
+                next_batch, next_batch_labels, sequence_lengths = get_batch(batch_size, "dev")
+                dev_loss, dev_accuracy = sess.run([loss, accuracy], {input_data_idx: next_batch, labels: next_batch_labels, seq_len:sequence_lengths})
+                ave_dev_loss += dev_loss
+                ave_dev_acc += dev_accuracy
+            ave_dev_loss /= num_dev_iter
+            ave_dev_acc /= num_dev_iter
+            writer.add_summary(summary, i)
+
+            print "dev loss: ", ave_dev_loss
+            print "dev accuracy: ", ave_dev_acc
+            if ave_dev_loss < min_dev_loss:
+                min_dev_loss = ave_dev_loss
+                save_path = saver.save(sess, "models/training_lstm.ckpt", global_step=i)
+                print("saved to %s" % save_path)
+
     writer.close()
 
 
 
-    # evaluate on training set
-    iterations = 10
-    total_loss = 0.
-    average_accuracy = 0.
 
 
-    for i in range(iterations):
-        #Next Batch of reviews
-        nextBatch, nextBatchLabels_non_one_hot = getTrainBatch();
-        # nextBatchLabels = tf.one_hot(nextBatchLabels_non_one_hot,2)
 
-        # enc = OneHotEncoder(n_values=2, sparse=False, dtype="int32")
-        # # set_trace()
-        # nextBatchLabels_rolled =  enc.fit_transform(nextBatchLabels_non_one_hot).tolist()
-        # nextBatchLabels = []
-        # for j in range(len(nextBatchLabels_non_one_hot)):
-        #     nextBatchLabels.append(nextBatchLabels_rolled[0][ 2*j : 2*j+2])
 
-        # integer encode
-        label_encoder = LabelEncoder()
-        integer_encoded = label_encoder.fit_transform(nextBatchLabels_non_one_hot)
-        # print(integer_encoded)
-        # binary encode
-        onehot_encoder = OneHotEncoder(sparse=False, dtype="int32")
-        integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
-        nextBatchLabels = onehot_encoder.fit_transform(integer_encoded)
-        # print(onehot_encoded)
 
-        [accuracy1, loss1, prediction1, labels1] = sess.run([accuracy, loss, prediction, labels], 
-                                        {input_data: nextBatch, labels: nextBatchLabels})
-        # print "prediction this batch: ", prediction1
-        # print "labels this batch: ", labels1
-        # set_trace()
-        print "loss this batch: ", loss1
-        print "accuracy this batch: ", accuracy1
-        total_loss += loss1
-        average_accuracy += accuracy1
-    average_loss = total_loss / iterations
-    print "average_loss: ", average_loss
-    print "average_accuracy: ", average_accuracy / iterations
 
+
+
+
+
+
+
+
+    # DEFINING THE COMPUTATION GRAPH
+    # tf.reset_default_graph()
+    # labels = tf.placeholder(tf.float32, [batch_size, num_classes])
+    # input_data_idx = tf.placeholder(tf.int32, [batch_size, max_seq_length])
+    # # data = tf.Variable(tf.zeros([batch_size, max_seq_length, num_dimensions]),dtype=tf.float32)
+    # input_data = tf.placeholder(tf.float32, [batch_size, max_seq_length, num_dimensions])
+    # input_data = tf.nn.embedding_lookup(word_vectors.vectors,input_data_idx)
+    # seq_len = tf.placeholder(tf.int32, [batch_size])
+    # lstmCell = tf.contrib.rnn.GRUCell(lstmUnits)
+    # # lstmCell = tf.contrib.rnn.BasicLSTMCell(lstmUnits)
+    # # lstmCell = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.75)
+    # value, state = tf.nn.dynamic_rnn(lstmCell, input_data, dtype=tf.float32, time_major=False)
+    # # value, state = tf.nn.static_rnn(lstmCell, input_data, dtype=tf.float32)
+
+    # # weight = tf.Variable(tf.truncated_normal([lstmUnits, num_classes]))
+    # weight = tf.get_variable("weight", [lstmUnits, num_classes], initializer=tf.contrib.layers.xavier_initializer(seed=3))
+    # bias = tf.Variable(tf.constant(0.01, shape=[num_classes]))
+    # value = tf.transpose(value, [1, 0, 2])
+    # average_val = tf.reduce_mean(tf.gather(value, tf.range(0, tf.reduce_max(seq_len))), axis=0)
+    # # average_val = tf.reduce_mean(tf.gather(value, tf.range(0, tf.reduce_max(seq_len))), axis=1)
+    # last = tf.gather(value, int(value.get_shape()[1]) - 1)
+    # prediction = (tf.matmul(average_val, weight) + bias)
+
+    # correctPred = tf.equal(tf.argmax(prediction,1), tf.argmax(labels,1))
+    # accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
+    # dev_accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
+
+    # loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
+    # dev_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
+    # optimizer = tf.train.AdamOptimizer(learning_rate=learn_rate).minimize(loss)
+    # tf.reset_default_graph()
+    sess = tf.InteractiveSession()
+    saver = tf.train.Saver()
+    saver.restore(sess, tf.train.latest_checkpoint('models'))
+    # evaluating the model
+    dataset_types = ["train", "dev"]
+    for dataset_type in dataset_types:
+        print "evaluating trained model's performance on    " + dataset_type + "    dataset: "
+        # evaluate on training set
+        if dataset_type == "train":
+            num_batches = int(math.floor(num_train/batch_size))
+        elif dataset_type == "dev":
+            num_batches = int(math.floor(num_dev/batch_size))
+        
+        ave_loss = 0
+        ave_acc = 0
+        for batch_idx in range(num_batches-1):
+            next_batch, next_batch_labels, sequence_lengths = get_ordered_data(batch_idx, dataset_type)
+            # set_trace()
+            loss1, accuracy1 = sess.run([loss, accuracy], {input_data_idx: next_batch, labels: next_batch_labels, seq_len:sequence_lengths})
+            ave_loss += loss1
+            ave_acc += accuracy1
+        ave_loss /= num_batches
+        ave_acc /= num_batches
+        print "loss:   ", ave_loss
+        print "accuracy:   ", ave_acc
 
 
 
