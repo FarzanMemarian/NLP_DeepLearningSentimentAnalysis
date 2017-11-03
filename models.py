@@ -118,6 +118,21 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors,
         return arr, next_batch_labels, sequence_lengths
 
 
+    def get_ordered_data_test(batch_idx, which_dataset="train"):
+        dataset = test_mat
+        seq_lens = test_seq_lens
+
+        labels = []
+        sequence_lengths = []
+        arr = np.zeros([batch_size, max_seq_length], dtype=int)
+        idx = 0
+        for exm in range(batch_idx * batch_size, (batch_idx+1) * batch_size):
+            arr[idx,:] = dataset[exm,:]
+            sequence_lengths.append(seq_lens[exm])
+            idx += 1
+
+        return arr, sequence_lengths
+
 
 
     # *************************************************
@@ -131,22 +146,24 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors,
     input_data = tf.placeholder(tf.float32, [batch_size, max_seq_length, num_dimensions])
     input_data = tf.nn.embedding_lookup(word_vectors.vectors,input_data_idx)
     seq_len = tf.placeholder(tf.int32, [batch_size])
-    # lstmCell = tf.contrib.rnn.BasicLSTMCell(lstmUnits)
-    lstmCell = tf.contrib.rnn.GRUCell(lstmUnits)
-    lstmCell_bw = tf.contrib.rnn.GRUCell(lstmUnits)
-    # lstmCell = tf.nn.BidirectionalGridLSTMCell(lstmUnits)
-    lstmCell = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.75)
-    lstmCell_bw = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.75)
+    # rnnCell = tf.contrib.rnn.BasicLSTMCell(lstmUnits)
+    rnnCell = tf.contrib.rnn.GRUCell(lstmUnits)
+    rnnCell_bw = tf.contrib.rnn.GRUCell(lstmUnits)
+    # rnnCell = tf.nn.BidirectionalGridLSTMCell(lstmUnits)
+    # rnnCell = tf.contrib.rnn.DropoutWrapper(cell=rnnCell, output_keep_prob=0.75)
+    # rnnCell_bw = tf.contrib.rnn.DropoutWrapper(cell=rnnCell, output_keep_prob=0.75)
 
-    z_state = lstmCell.zero_state(batch_size, tf.float32)
-    z_state_bw = lstmCell_bw.zero_state(batch_size, tf.float32)    
+    z_state = rnnCell.zero_state(batch_size, tf.float32)
+    z_state_bw = rnnCell_bw.zero_state(batch_size, tf.float32)    
     if bidir == True:
-        (rnn_outputs_fw, rnn_outputs_bw) , final_state = tf.nn.bidirectional_dynamic_rnn(lstmCell, lstmCell_bw, input_data, sequence_length=seq_len,
-                                         initial_state_fw=z_state, initial_state_bw=z_state_bw)
+        rnn_outputs_fw, rnn_outputs_bw , final_state = tf.nn.bidirectional_dynamic_rnn(rnnCell, rnnCell_bw, 
+            input_data, sequence_length=seq_len, 
+            initial_state_fw=z_state, initial_state_bw=z_state_bw)
         value = tf.concat([rnn_outputs_fw,rnn_outputs_bw],2)
     else:
-        value, state = tf.nn.dynamic_rnn(lstmCell, input_data, dtype=tf.float32, time_major=False)
-    # value, state = tf.nn.static_rnn(lstmCell, input_data, dtype=tf.float32)
+        value, state = tf.nn.dynamic_rnn(rnnCell, input_data, dtype=tf.float32, time_major=False)
+    # value, state = tf.nn.static_rnn(rnnCell, input_data, dtype=tf.float32)
+
 
     # weight = tf.Variable(tf.truncated_normal([lstmUnits, num_classes]))
     weight = tf.get_variable("weight", [lstmUnits, num_classes], initializer=tf.contrib.layers.xavier_initializer(seed=3))
@@ -222,7 +239,7 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors,
             # print "value shape", np.shape(value)
             # print "average_val shape", np.shape(average_val)
             # print "seq_len1 shape", np.shape(seq_len1)
-  test_exs_predicted          # print "data1 shape", np.shape(data1)
+            # print "data1 shape", np.shape(data1)
             # print "last1 shape", np.shape(last1)
 
         # if (i % 100 == 0):
@@ -257,49 +274,6 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors,
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # DEFINING THE COMPUTATION GRAPH
-    # tf.reset_default_graph()
-    # labels = tf.placeholder(tf.float32, [batch_size, num_classes])
-    # input_data_idx = tf.placeholder(tf.int32, [batch_size, max_seq_length])
-    # # data = tf.Variable(tf.zeros([batch_size, max_seq_length, num_dimensions]),dtype=tf.float32)
-    # input_data = tf.placeholder(tf.float32, [batch_size, max_seq_length, num_dimensions])
-    # input_data = tf.nn.embedding_lookup(word_vectors.vectors,input_data_idx)
-    # seq_len = tf.placeholder(tf.int32, [batch_size])
-    # lstmCell = tf.contrib.rnn.GRUCell(lstmUnits)
-    # # lstmCell = tf.contrib.rnn.BasicLSTMCell(lstmUnits)
-    # # lstmCell = tf.contrib.rnn.DropoutWrapper(cell=lstmCell, output_keep_prob=0.75)
-    # value, state = tf.nn.dynamic_rnn(lstmCell, input_data, dtype=tf.float32, time_major=False)
-    # # value, state = tf.nn.static_rnn(lstmCell, input_data, dtype=tf.float32)
-
-    # # weight = tf.Variable(tf.truncated_normal([lstmUnits, num_classes]))
-    # weight = tf.get_variable("weight", [lstmUnits, num_classes], initializer=tf.contrib.layers.xavier_initializer(seed=3))
-    # bias = tf.Variable(tf.constant(0.01, shape=[num_classes]))
-    # value = tf.transpose(value, [1, 0, 2])
-    # average_val = tf.reduce_mean(tf.gather(value, tf.range(0, tf.reduce_max(seq_len))), axis=0)
-    # # average_val = tf.reduce_mean(tf.gather(value, tf.range(0, tf.reduce_max(seq_len))), axis=1)
-    # last = tf.gather(value, int(value.get_shape()[1]) - 1)
-    # prediction = (tf.matmul(average_val, weight) + bias)
-
-    # correctPred = tf.equal(tf.argmax(prediction,1), tf.argmax(labels,1))
-    # accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
-    # dev_accuracy = tf.reduce_mean(tf.cast(correctPred, tf.float32))
-
-    # loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
-    # dev_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=labels))
-    # optimizer = tf.train.AdamOptimizer(learning_rate=learn_rate).minimize(loss)
     # tf.reset_default_graph()
     sess = tf.InteractiveSession()
     saver = tf.train.Saver()
@@ -328,7 +302,23 @@ def train_fancy(train_exs, dev_exs, test_exs, word_vectors,
         print "accuracy:   ", ave_acc
 
 
+    # dataset_type = "test"
+    # for dataset_type in dataset_types:
+    #     print "evaluating trained model's performance on    " + dataset_type + "    dataset: "
+    #     # evaluate on training set
+    #     num_batches = int(math.floor(num_test/batch_size))
+        
+    #     ave_loss = 0
+    #     ave_acc = 0
+    #     prediction_test = []
+    #     for batch_idx in range(num_batches-1):
+    #         next_batch, sequence_lengths = get_ordered_data_test(batch_idx, dataset_type)
+    #         set_trace()
 
+    #         prediction1 = sess.run(prediction, {input_data_idx: next_batch, seq_len:sequence_lengths})
+    #         for inx in range(batch_size)
+    #             prediction_store = SentimentExample(next_batch, pred_this_instance)
+    #             predictions_test.append(prediction_store)
 
 
 
@@ -521,6 +511,7 @@ def train_ffnn(train_exs, dev_exs, test_exs, word_vectors, epochs, hidden_size, 
             # print "Example " + "; gold = " + repr(example.label) + "; pred = " +\
             #        repr(pred_this_instance) + " with probs " + repr(probs_this_instance)
             # print "  Hidden layer activations for this example: " + repr(z_this_instance)
+            # set_trace()
             prediction = SentimentExample(example.indexed_words, pred_this_instance)
             predictions_test.append(prediction)
         print "results for test set:"

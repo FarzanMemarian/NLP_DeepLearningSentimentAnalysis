@@ -1,9 +1,146 @@
+# part1
 # LONG WHOLE TRAINING DATA
-CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=5 --hid_step_sz=8530 --init_lr=0.01  --dec_step=100 --lrdf=0.99
+python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=5 --hid_step_sz=8530 --init_lr=0.01  --dec_step=100 --lrdf=0.99
 
 
-# ABRIDGED TRAINING DATA
-CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=1000 --epochs=2 --hid_step_sz=1000 --init_lr=0.01  --dec_step=100 --lrdf=0.99
+
+python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=5 --hid_step_sz=100 --init_lr=0.01  --dec_step=100 --lrdf=0.99
+results for training set:
+6677/8530 correct after training
+results for dev set:
+807/1066 correct after training
 
 
-CUDA_INVISIBLE_DEVICES=2 python2 sentiment.py --system_to_run="FF" --nb_exm=1000 --epochs=5 --hid_step_sz=1000 --init_lr=0.01  --dec_step=100 --lrdf=0.99
+
+python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=10 --hid_step_sz=100 --init_lr=0.01  --dec_step=100 --lrdf=0.99
+
+results for training set:
+6679/8530 correct after training
+results for dev set:
+808/1066 correct after training
+
+
+python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=5 --hid_step_sz=20 --init_lr=0.01  --dec_step=100 --lrdf=0.99
+
+results for training set:
+6623/8530 correct after training
+results for dev set:
+813/1066 correct after training --> 76.4%
+
+
+python2 sentiment.py --system_to_run="FF" --nb_exm=8530 --epochs=10 --hid_step_sz=1000 --init_lr=0.01  --dec_step=100 --lrdf=0.99
+
+
+
+#PART 2
+
+
+
+optimizer = adam
+batchscheme = totally random
+cell type: simple cell
+dropout:  No
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=1000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01
+evaluating trained model's performance on    train    dataset: 
+loss:    0.247602948486
+accuracy:    0.897065719249
+evaluating trained model's performance on    dev    dataset: 
+loss:    0.491780068619
+accuracy:    0.768571422781
+
+
+
+
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=10000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01
+evaluating trained model's performance on    train    dataset: 
+loss:    0.0374679994232
+accuracy:    0.987793419563
+evaluating trained model's performance on    dev    dataset: 
+loss:    1.05032849993
+accuracy:    0.772380953176
+
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=1000 --batchSize=100 --lstmUnits=60 --learn_rate=0.01
+evaluating trained model's performance on    train    dataset: 
+loss:    0.367565851352
+accuracy:    0.823058823277
+evaluating trained model's performance on    dev    dataset: 
+loss:    0.427470248938
+accuracy:    0.70000000596
+
+
+
+
+optimizer = adam
+batchscheme = totally random
+cell type: simple cell
+dropout:  yes
+
+ python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=1000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01
+
+evaluating trained model's performance on    train    dataset: 
+loss:    0.3341838017
+accuracy:    0.850821588451
+evaluating trained model's performance on    dev    dataset: 
+loss:    0.446769461887
+accuracy:    0.771428564617
+
+
+
+optimizer = adam
+batchscheme = totally random
+cell type: GRU
+dropout:  yes
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=1000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01
+
+evaluating trained model's performance on    train    dataset: 
+loss:    0.364399419074
+accuracy:    0.837910792987
+evaluating trained model's performance on    dev    dataset: 
+loss:    0.433916934899
+accuracy:    0.76857142789
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=5000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01
+
+evaluating trained model's performance on    train    dataset: 
+loss:    0.285447517961
+accuracy:    0.880281682585
+evaluating trained model's performance on    dev    dataset: 
+loss:    0.47745425914
+accuracy:    0.747619041375
+
+optimizer = adam
+batchscheme = totally random
+cell type: BasicLSTMCell
+dropout:  yes
+based on last layer!
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=1000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01
+evaluating trained model's performance on    train    dataset: 
+loss:    0.315878831086
+accuracy:    0.864201870603
+evaluating trained model's performance on    dev    dataset: 
+loss:    0.546304496697
+accuracy:    0.732380950451
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=5000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01
+
+evaluating trained model's performance on    train    dataset: 
+loss:    0.259344237004
+accuracy:    0.893544589969
+evaluating trained model's performance on    dev    dataset: 
+loss:    0.576514686857
+accuracy:    0.737142854077
+
+
+optimizer = adam
+batchscheme = totally random
+cell type: BasicLSTMCell, bidirectional
+dropout:  yes
+based on average!
+
+
+python sentiment.py --system_to_run="FANCY" --nb_exm=8530 --train_iter=1000 --batchSize=30 --lstmUnits=60 --learn_rate=0.01 --bidir="True"

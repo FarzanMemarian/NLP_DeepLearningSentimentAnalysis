@@ -56,7 +56,7 @@ if __name__ == '__main__':
         write_sentiment_examples(test_exs_predicted, "test-blind.output.txt", word_vectors.word_indexer)
     elif system_to_run == "FANCY":
         # test_exs_predicted = train_fancy(train_exs, dev_exs, test_exs, word_vectors)
-        test_exs_predicted = train_fancy(train_exs, dev_exs, test_exs, word_vectors, train_iter, 
+        train_fancy(train_exs, dev_exs, test_exs, word_vectors, train_iter, 
             batchSize, lstmUnits, learn_rate, bidir)
     else:
         raise Exception("Pass in either FF or FANCY to run the appropriate system")
